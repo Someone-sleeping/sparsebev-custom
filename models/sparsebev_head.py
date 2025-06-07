@@ -63,15 +63,25 @@ class SparseBEVHead(DETRHead):
         with torch.no_grad():
             self.init_query_bbox.weight[:, :2] = xy.reshape(-1, 2)  # [Q, 2]
 
+        self.bev_embedding = nn.Embedding(128 * 128, 160)
+
     def init_weights(self):
         self.transformer.init_weights()
 
-    def forward(self, mlvl_feats, img_metas):
+    def forward(self, mlvl_feats, img_metas, lss_bev=None):
         query_bbox = self.init_query_bbox.weight.clone()  # [Q, 10]
         #query_bbox[..., :3] = query_bbox[..., :3].sigmoid()
 
         # query denoising
         B = mlvl_feats[0].shape[0]
+
+        bev_queries = self.bev_embedding.weight
+        bev_queries = bev_queries.unsqueeze(1).repeat(1, B, 1)
+        
+        if lss_bev is not None:
+            bev_queries = bev_queries.view(B, 160, 128, 128)
+            bev_feats = bev_queries + lss_bev
+
         query_bbox, query_feat, attn_mask, mask_dict = self.prepare_for_dn_input(B, query_bbox, self.label_enc, img_metas)
 
         cls_scores, bbox_preds = self.transformer(
@@ -80,6 +90,7 @@ class SparseBEVHead(DETRHead):
             mlvl_feats,
             attn_mask=attn_mask,
             img_metas=img_metas,
+            bev_queries=bev_feats
         )
 
         bbox_preds[..., 0] = bbox_preds[..., 0] * (self.pc_range[3] - self.pc_range[0]) + self.pc_range[0]

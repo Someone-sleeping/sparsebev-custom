@@ -118,6 +118,8 @@ def sampling_4d(sample_points, mlvl_feats, scale_weights, lidar2img, image_h, im
     scale_weights = scale_weights.permute(0, 2, 3, 1, 4, 5)
     scale_weights = scale_weights.reshape(B*G*T, Q, P, -1)
 
+    sample_points_cam = sample_points_cam.contiguous()
+    scale_weights = scale_weights.contiguous()
     # multi-scale multi-view grid sample
     final = msmv_sampling(mlvl_feats, sample_points_cam, scale_weights)
 
@@ -128,3 +130,21 @@ def sampling_4d(sample_points, mlvl_feats, scale_weights, lidar2img, image_h, im
     final = final.flatten(3, 4)  # [B, Q, G, FP, C]
 
     return final
+
+
+def sample_bev_features(query_box, lss_bev_features):
+    """
+    在 LSS 生成的 BEV 特征图中，根据 query_box 的 BEV grid 位置 (x, y) 进行采样。
+    """
+    B, C, H, W = lss_bev_features.shape
+    _, N, _ = query_box.shape 
+
+    xy = query_box[:, :, :2] * 2 - 1
+
+    grid = xy.view(B, N, 1, 2)
+
+    sampled_features = F.grid_sample(lss_bev_features, grid, align_corners=True, mode="bilinear")
+
+    sampled_features = sampled_features.squeeze(-1).permute(0, 2, 1)
+
+    return sampled_features

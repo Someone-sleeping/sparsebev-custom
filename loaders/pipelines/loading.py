@@ -56,13 +56,24 @@ class LoadMultiViewImageFromMultiSweeps(object):
             'CAM_BACK', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT'
         ]
 
+        results['adjacent'] = []
+        
         if len(results['sweeps']['prev']) == 0:
             for _ in range(self.sweeps_num):
+                sweep = {}
                 for j in range(len(cam_types)):
                     results['img'].append(results['img'][j])
                     results['img_timestamp'].append(results['img_timestamp'][j])
                     results['filename'].append(results['filename'][j])
                     results['lidar2img'].append(np.copy(results['lidar2img'][j]))
+                    sweep[cam_types[j]] = {
+                        'data_path' : results['img_filename'][j],
+                        'sensor2ego_rotation_fbbev' : results['sensor2ego_rotation_fbbev'][j],
+                        'sensor2ego_translation_fbbev' : results['sensor2ego_translation_fbbev'][j],
+                        'ego2global_rotation_fbbev' : results['ego2global_rotation_fbbev'][j],
+                        'ego2global_translation_fbbev' : results['ego2global_translation_fbbev'][j],
+                    }
+                results['adjacent'].append(sweep)
         else:
             if self.test_mode:
                 interval = self.test_interval
@@ -76,14 +87,13 @@ class LoadMultiViewImageFromMultiSweeps(object):
                 min_interval = min(max_interval, self.train_interval[0])
                 interval = np.random.randint(min_interval, max_interval + 1)
                 choices = [(k + 1) * interval - 1 for k in range(self.sweeps_num)]
-
             for idx in sorted(list(choices)):
                 sweep_idx = min(idx, len(results['sweeps']['prev']) - 1)
                 sweep = results['sweeps']['prev'][sweep_idx]
 
                 if len(sweep.keys()) < len(cam_types):
                     sweep = results['sweeps']['prev'][sweep_idx - 1]
-
+                results['adjacent'].append(sweep)
                 for sensor in cam_types:
                     results['img'].append(mmcv.imread(sweep[sensor]['data_path'], self.color_type))
                     results['img_timestamp'].append(sweep[sensor]['timestamp'] / 1e6)
